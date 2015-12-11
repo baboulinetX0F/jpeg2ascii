@@ -2,14 +2,13 @@
 #include <stdlib.h>
 #include <jpeglib.h>
 #include <string.h>
+#include <math.h>
 
-#define min(X, Y)  ((X) < (Y) ? (X) : (Y))
-#define max(X, Y)  ((X) > (Y) ? (X) : (Y))
 
 // Prototype de fonctions
 
 unsigned char* read(char* filename);
-//double* RGBtoHSL(int r, int g, int b);
+double* RGBtoHSL(double r, double g, double b);
 unsigned char* RGBtoHSLArray(unsigned char* RGBinput);
 
 unsigned char* read(char* filename)
@@ -57,21 +56,20 @@ unsigned char* RGBtoHSLArray(unsigned char* RGBinput)
 {
     unsigned char* output;
     
-    
+    // CODE TO BE ADDED HERE
     
     return output;
 }
 
-double* RGBtoHSL(int r, int g, int b)
+double* RGBtoHSL(double r, double g, double b)
 {
     double* output = (double*) malloc (sizeof(double)*3);
-     r /= 255, g /= 255, b /= 255;
-    double max = max(r,max(g,b));
-    double min = min(r,min(g,b));    
-    double h, s, l = (max + min) / 2;
     
-    printf("%f\n%f\n", max, min);
-
+    r /= 255, g /= 255, b /= 255;
+    double max = fmax(r,fmax(g,b));
+    double min = fmin(r,fmin(g,b));    
+    double h, s, l = (max + min) / 2;
+   
     if(max == min){
         h = s = 0; // achromatic
     }
@@ -87,7 +85,7 @@ double* RGBtoHSL(int r, int g, int b)
             h = (r - g) / d + 4;
     }
     h /= 6;      
-    printf("%f\n%f\n%f\n", h, s, l);
+    
     output[0] = h; output[1] = s; output[2] = l;
     return output;
 }
@@ -105,11 +103,10 @@ int main(int argc, char* argv[])
     data = read(argv[1]);
     
     // FOR DEBUG    
-    double* test = RGBtoHSL(234, 0, 0);
-    printf("H:%f\nS:%f\nL:%f\n", test[0], test[1], test[2]);
+    double* test = RGBtoHSL(data[0], data[1], data[2]);
     printf("R:%d\nG:%d\nB:%d\n", data[0], data[1], data[2]);
-    
-    
+    printf("H:%f\nS:%f\nL:%f\n", test[0], test[1], test[2]);
+      
     
     return 0;
 }

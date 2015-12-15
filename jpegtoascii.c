@@ -266,7 +266,6 @@ char GetASCII(char ASCIITable[6][7], float totalHue, float totalLum, int cmp)
     return output;
 }
 
-
 // convASCII : Fonction qui convertit un tableau de données HSL pour un affichage ASCII
 void convertASCII(float* dataHSL, int width_image, int height_image, int width_lines, int height_lines)
 {
@@ -279,32 +278,35 @@ void convertASCII(float* dataHSL, int width_image, int height_image, int width_l
     fillASCIITable(ASCIITable);
     
     // Position lors du parcours de l'image
-    int x,y;
-    int block_x,block_y;
+    unsigned int x,y;
+    unsigned int block_x,block_y;
+    int debug = 0;
     
-    float totalHue,totalLum = 0;
+    float totalHue = 0; float totalLum = 0;
     int cmp=0;
     
     for (y = 0; y < height_lines; y++)
     {
         for (x = 0; x < width_lines; x++)
-        {
-            for(block_y=0;block_y<=height_block*y;block_y++)
+        {   
+            for (block_y = height_block*y;block_y < height_block + (height_block*y);block_y++)
             {
-                for(block_x=0;block_x<=width_block*x;block_x+=3)
+                for (block_x = width_block*x;block_x < width_block + (width_block*x);block_x+=3)
                 {
-                    totalHue+=dataHSL[block_x + (block_y*width_image*3)];
-                    totalLum+=dataHSL[(block_x+2) + (block_y*width_image*3)];
+                    totalHue+= dataHSL[block_x + (block_y*width_image*3)];                    
+                    totalLum+= dataHSL[block_x + 2 + (block_y*width_image*3)];
                     cmp++;
-                } 
+                }
             }
             printf("%c", GetASCII(ASCIITable,totalHue,totalLum,cmp));
             totalHue=0;
             totalLum=0;
+            debug+=cmp;
             cmp=0;
         }
         printf("\n");
-    }   
+    }  
+    printf("%d\n",debug);    
     
 }
 
@@ -333,7 +335,7 @@ int main(int argc, char* argv[])
     convertASCII(dataHSL, width, height, atoi(argv[2]), atoi(argv[3]));
     
     // Et l'on réecrit dans un fichier le tableau obtenu afin de voir la conversion fonctionne
-    write(data,width,height,components);         
-    
+    write(data,width,height,components); 
+
     return 0;
 }

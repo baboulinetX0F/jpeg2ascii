@@ -253,62 +253,106 @@ void fillASCIITable (char ASCIITable [6][7])
     ASCIITable[5][6] = '@';
 }
 
-char GetASCII(char ASCIITable[6][7], float totalHue, float totalLum, int cmp)
+char GetASCII(char ASCIITable[6][7], int* RGB)
 {
     char output = '-';
-    float avgHue, avgLum; 
     
-    avgHue = totalHue / cmp;
-    avgLum = totalLum / cmp;
+    float* tmp = RGBtoHSL((float) RGB[0], (float) RGB[1], (float) RGB[2]);
     
-    output = ASCIITable[(int)floor(avgLum*6)][(int)floor(avgHue*7)];
+    output = ASCIITable[(int)floor(tmp[2]*6)][(int)floor(tmp[0]*7)];
     
     return output;
 }
 
-// convASCII : Fonction qui convertit un tableau de données HSL pour un affichage ASCII
-void convertASCII(float* dataHSL, int width_image, int height_image, int width_lines, int height_lines)
+
+int* getRGBAvgBlock(unsigned char*** data, int block_x, int block_y, int width_block, int height_block)
 {
-    // Calcul de la taille d'un bloc d'image
-    int width_block, height_block;
-    width_block = width_image / width_lines;
-    height_block = height_image / height_lines;
+    int* output =(int*) malloc(sizeof(int)*3);
+    int totalR,totalG,totalB,cmp_pixel,x,y;
+    totalR = totalG = totalB = cmp_pixel = 0;
+    
+    for (y=block_y*height_block;y<(height_block*block_y)+height_block;y++)
+    {
+        for (x=block_x*width_block;x<width_block + (width_block*block_x);x++)
+        {
+            totalR += data[y][x][0];
+            totalG += data[y][x][1];
+            totalB += data[y][x][2];
+            cmp_pixel++;            
+        }
+    }
+    
+     output[0] = totalR/cmp_pixel;
+     output[1] = totalG/cmp_pixel;
+     output[2] = totalB/cmp_pixel;
+
+    
+    return output;
+}
+
+void convASCII(unsigned char*** data, int width_img, int height_img, int width_lines, int nb_lines)
+{
+     
+    int width_block = width_img / width_lines;
+    int height_block = height_img / nb_lines;
+    
+    int rst_width = width_img % width_lines;
+    int rst_height = height_img % nb_lines;
+    
+    int *tmp;
+    int x,y;
+    
+    char ctmp;
     
     char ASCIITable[6][7];
     fillASCIITable(ASCIITable);
     
-    // Position lors du parcours de l'image
-    unsigned int x,y;
-    unsigned int block_x,block_y;
-    int debug = 0;
-    
-    float totalHue = 0; float totalLum = 0;
-    int cmp=0;
-    
-    for (y = 0; y < height_lines; y++)
+    for (y=0;y<nb_lines;y++)
     {
-        for (x = 0; x < width_lines; x++)
-        {   
-            for (block_y = height_block*y;block_y < height_block + (height_block*y);block_y++)
-            {
-                for (block_x = width_block*x;block_x < width_block + (width_block*x);block_x+=3)
-                {
-                    totalHue+= dataHSL[block_x + (block_y*width_image*3)];                    
-                    totalLum+= dataHSL[block_x + 2 + (block_y*width_image*3)];
-                    cmp++;
-                }
-            }
-            printf("%c", GetASCII(ASCIITable,totalHue,totalLum,cmp));
-            totalHue=0;
-            totalLum=0;
-            debug+=cmp;
-            cmp=0;
+        for (x=0;x<width_lines;x++)
+        {              
+            tmp = getRGBAvgBlock(data,x,y,width_block,height_block);
+            ctmp = GetASCII(ASCIITable, tmp);
+            printf("%c",ctmp);
         }
         printf("\n");
-    }  
-    printf("%d\n",debug);    
+    }
+    
     
 }
+
+unsigned char ***conv3D (unsigned char* input, int w, int h)
+{    
+    // Allocation dynamique du tableau a trois dimensions
+    unsigned char ***ptr;
+    int x,y;
+    
+    ptr=malloc(h*sizeof(*ptr));
+    for (y=0; y<h; y++)
+        ptr[y]=malloc(w*sizeof(**ptr));
+    for (y=0; y<h; y++)
+    {
+       for (x=0; x<w; x++)
+        {
+            ptr[y][x]=malloc(3*sizeof(***ptr));
+        } 
+    }
+    
+    // Rempissage du tableau a partir de l'input
+    for (y=0;y<h;y++)
+    {
+        for(x=0;x<w;x++)
+        {
+            ptr[y][x][0]=input[(x*3) + (y*w*3)];
+            ptr[y][x][1]=input[(x*3) + 1 + (y*w*3)];
+            ptr[y][x][2]=input[(x*3) + 2 + (y*w*3)];
+        }
+    }
+    
+    return ptr; 
+}
+
+
 
 int main(int argc, char* argv[])
 {    
@@ -318,24 +362,22 @@ int main(int argc, char* argv[])
         return 1;
     }
     
-    unsigned char* data;   
-    float* dataHSL;
+    unsigned char* data;
+    unsigned char*** data3D;
+    float* dataHSL;    
     int width,height,components;
     
     // On lit le fichier jpeg passé en arguments et recupere son contenu sous
     // forme d'un tableau d'unsigned char contenant les valeurs RGB de chaque pixels
     data = read(argv[1],&width,&height,&components);
     
-    // On convertit le tableau RGB en HSL grace a la fonction RGBtoHSL
-    dataHSL=RGBtoHSLArray(data,&width,&height,&components); 
+    data3D=conv3D(data,width,height);
     
-    // On effectue la conversion inverse
-    data=convhsl2rgb(dataHSL,width,height); 
-    
-    convertASCII(dataHSL, width, height, atoi(argv[2]), atoi(argv[3]));
+    convASCII(data3D, width, height,atoi(argv[2]),atoi(argv[3]));
     
     // Et l'on réecrit dans un fichier le tableau obtenu afin de voir la conversion fonctionne
     write(data,width,height,components); 
+        
 
     return 0;
 }

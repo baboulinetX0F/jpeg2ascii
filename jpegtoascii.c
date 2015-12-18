@@ -17,8 +17,13 @@
 // Prototype de fonctions
 
 unsigned char* read(char* filename,int* width,int* height,int* components);
+int write(unsigned char* dataRGB, int width, int height, int components);
 float* RGBtoHSL(float r, float g, float b);
 float* RGBtoHSLArray(unsigned char* RGBinput,int* width, int* height, int* components);
+unsigned char ***conv3D (unsigned char* input, int w, int h);
+void convASCII(unsigned char*** data, int width_img, int height_img, int width_lines, int nb_lines);
+char GetASCII(char ASCIITable[6][7], int* RGB);
+void fillASCIITable (char ASCIITable [6][7]);
 
 /* Fonction générique de conversion hsl to rgb */
 float hue2rgb(float v1,float v2,float vH)
@@ -112,6 +117,7 @@ unsigned char* read(char* filename,int* width,int* height,int* components)
     return data;
     
 }
+
 // RGBtoHSLArray : Convert un tableau de valeur RGB en tableau de valeurs HSL
 float* RGBtoHSLArray(unsigned char* RGBinput,int* width, int* height, int* components)
 {
@@ -201,6 +207,8 @@ int write(unsigned char* dataRGB, int width, int height, int components)
     return 0;
 }
 
+// fillASCIITable : Remplit un tableau de char passé en paramètre en valeur ASCII utilisé
+// ensuite de la conversion HSL vers ASCIII
 void fillASCIITable (char ASCIITable [6][7])
 {
     ASCIITable[0][0] = '.';
@@ -222,7 +230,7 @@ void fillASCIITable (char ASCIITable [6][7])
     ASCIITable[1][3] = 'c';
     ASCIITable[1][4] = 'C';
     ASCIITable[1][5] = 'a';
-    ASCIITable[1][6] = '&';
+    ASCIITable[1][6] = '*';
     
     ASCIITable[2][1] = '+';
     ASCIITable[2][2] = '(';
@@ -253,24 +261,35 @@ void fillASCIITable (char ASCIITable [6][7])
     ASCIITable[5][6] = '@';
 }
 
+// GetASCII : Renvoie un caractère ASCII basé sur le triplé RGB passé en paramètre.
+// Il ira piocher dans un tableau de caractère passé également en paramètre
 char GetASCII(char ASCIITable[6][7], int* RGB)
 {
-    char output = '-';
+    char output;
     
+    // On convertit le triplé RGB en valeur HSL
     float* tmp = RGBtoHSL((float) RGB[0], (float) RGB[1], (float) RGB[2]);
     
-    output = ASCIITable[(int)floor(tmp[2]*6)][(int)floor(tmp[0]*7)];
+    // Pour retourner une valeur ASCII suivant un triplé HSL, on va choisir un caractère
+    // dans le tableau de caractère passé en paramètre suivant la valeur de la luminesence et de la couleur
+    // Pour recuperer une valeur dans le tableau a partir d'une valeur, on va la multiplier par le nombre de colonne (dans le cas de la couleur)
+    // et l'arrondir a l'entier le plus proche (avec floor() ) afin de savoir quel caractère prendre. (On effectue la même manipulation avec les lignes pour la luminesence)
+    output = ASCIITable[(int)floor(tmp[0]*6)][(int)floor(tmp[2]*7)];
     
     return output;
 }
 
 
+
+// getRGBAvgBlock : Retourne les valeurs RGB moyenne d'un bloc de l'image (ou le contenu est stocké dans data)
+// On assume qu'on connait deja la position du bloc (position X et Y)  et sa taille (Hauteur + Longueur d'un bloc)
 int* getRGBAvgBlock(unsigned char*** data, int block_x, int block_y, int width_block, int height_block)
 {
     int* output =(int*) malloc(sizeof(int)*3);
     int totalR,totalG,totalB,cmp_pixel,x,y;
     totalR = totalG = totalB = cmp_pixel = 0;
     
+    // On parcours tous les pixels du bloc de l'ialge dont la position et la taille sont passé en paramètre
     for (y=block_y*height_block;y<(height_block*block_y)+height_block;y++)
     {
         for (x=block_x*width_block;x<width_block + (width_block*block_x);x++)
@@ -282,6 +301,8 @@ int* getRGBAvgBlock(unsigned char*** data, int block_x, int block_y, int width_b
         }
     }
     
+    // Après avoir additionné toutes les valeurs RGB de chaque pixel du bloc, on retourne un triplé
+    // avec la moyenne de chaque valeur du triplé RGB
      output[0] = totalR/cmp_pixel;
      output[1] = totalG/cmp_pixel;
      output[2] = totalB/cmp_pixel;
@@ -290,6 +311,8 @@ int* getRGBAvgBlock(unsigned char*** data, int block_x, int block_y, int width_b
     return output;
 }
 
+// convASCII : Fonction qui s'occupe d'afficher une image dont le contenu RGB est passé en paramètre
+// en ASCII dans le terminal suivant les paramètres d'affichages données (nombre de lignes et nombre de caractère par ligne)
 void convASCII(unsigned char*** data, int width_img, int height_img, int width_lines, int nb_lines)
 {
      
@@ -307,13 +330,29 @@ void convASCII(unsigned char*** data, int width_img, int height_img, int width_l
     char ASCIITable[6][7];
     fillASCIITable(ASCIITable);
     
+    // On parcourt tous les blocks de l'image
     for (y=0;y<nb_lines;y++)
     {
         for (x=0;x<width_lines;x++)
-        {              
-            tmp = getRGBAvgBlock(data,x,y,width_block,height_block);
-            ctmp = GetASCII(ASCIITable, tmp);
-            printf("%c",ctmp);
+        { 
+            // Lors qu'on arrive au dernier bloc en x
+            //On inclut le reste des pixels hors bloc dans la moyenne du dernier bloc 
+            if (x == width_lines-1)
+            {
+                tmp = getRGBAvgBlock(data,x,y,width_block+rst_width,height_block);                
+            }
+            else
+            {
+
+                // Pour chaque bloc on utilise la fonction getRGBAvgBlock pour recuperer les valeurs RGB
+                // moyenne du bloc que l'on passera ensuite a la fonction GetASCII
+                tmp = getRGBAvgBlock(data,x,y,width_block,height_block);
+            
+                // A partir du triplé de RGB passé en paramètre et le tableau de caractère, la fonction
+                // va retourner le caractère ASCII corréspondant.
+                ctmp = GetASCII(ASCIITable, tmp);
+                printf("%c",ctmp);
+            }
         }
         printf("\n");
     }
@@ -321,20 +360,26 @@ void convASCII(unsigned char*** data, int width_img, int height_img, int width_l
     
 }
 
+
+// conv3D : Convert un tableau a 1 dimension de valeurs RGB passé en paramètre et renvoie
+// un tableau a trois dimensions avec les mêmes valeurs
 unsigned char ***conv3D (unsigned char* input, int w, int h)
 {    
     // Allocation dynamique du tableau a trois dimensions
-    unsigned char ***ptr;
+    
+    unsigned char ***ptr; // Tableau 3d que l'on va retourner a la fin de la fonction
+    
+    // Variable utilisé pour le parcours pour l'allocation dynamique
     int x,y;
     
-    ptr=malloc(h*sizeof(*ptr));
+    ptr=malloc(h*sizeof(*ptr)); // On alloue la première dimension du tableau
     for (y=0; y<h; y++)
-        ptr[y]=malloc(w*sizeof(**ptr));
+        ptr[y]=malloc(w*sizeof(**ptr)); // On alloue la deuxième dimension en effectuant un malloc a chaque case de la premère dimension
     for (y=0; y<h; y++)
     {
        for (x=0; x<w; x++)
         {
-            ptr[y][x]=malloc(3*sizeof(***ptr));
+            ptr[y][x]=malloc(3*sizeof(***ptr)); // On alloue la troisième dimension
         } 
     }
     
@@ -343,6 +388,8 @@ unsigned char ***conv3D (unsigned char* input, int w, int h)
     {
         for(x=0;x<w;x++)
         {
+            // On remplit le tableau avec les triplés RGB de l'ancien tableau
+            // que l'on stocke dans la troisième dimension du tableau
             ptr[y][x][0]=input[(x*3) + (y*w*3)];
             ptr[y][x][1]=input[(x*3) + 1 + (y*w*3)];
             ptr[y][x][2]=input[(x*3) + 2 + (y*w*3)];
@@ -356,28 +403,45 @@ unsigned char ***conv3D (unsigned char* input, int w, int h)
 
 int main(int argc, char* argv[])
 {    
-    if (argc < 2)
+    if (argc < 4)
     {
-        fprintf(stderr,"ERREUR : Requiert au moins un argument (nom du fichier) \n");
+        fprintf(stderr,"ERREUR : Requiert au moins 3 arguments \n");
         return 1;
-    }
+    }    
     
     unsigned char* data;
-    unsigned char*** data3D;
-    float* dataHSL;    
+    unsigned char*** data3D;        
     int width,height,components;
     
     // On lit le fichier jpeg passé en arguments et recupere son contenu sous
     // forme d'un tableau d'unsigned char contenant les valeurs RGB de chaque pixels
     data = read(argv[1],&width,&height,&components);
     
+    // Verification si la taille a afficher sur le terminal est correcte
+    if (atoi(argv[2]) > width || atoi(argv[2]) <= 0)
+    {
+        fprintf(stderr,"ERREUR : La longueur de l'image a affiché en ASCII est incorrect (Doit etre superieur a 0 et inferieur a la longueur de l'image originale) \n");
+        return 1;
+    }
+    if (atoi(argv[3]) > height || atoi(argv[3]) <= 0)
+    {
+        fprintf(stderr,"ERREUR : La hauteur de l'image a affiché en ASCII est incorrect (Doit etre superieur a 0 et inferieur a la hauteur de l'image originale) \n");
+        return 1;
+    }
+    
+    // On convertit les données recuperé dans le tableau a une dimensions
+    // en tableau a trois dimentions afin de les utiliser dans la fonction convASCII
     data3D=conv3D(data,width,height);
     
+    // On libère le tableau a une dimension qui nous seras plus utile pour la suite
+    // On utilisera le tableau a trois dimension crée juste au dessus.
+    free(data);
+    
+    // On appele la fonction qui va afficher l'image précdemment lue et la convertir en caractère ASCII
+    // On passe donc a la fonction le tableau des données RGB, la taille de l'image, et la taille de l'affichage de l'image ASCII sur le teminal
     convASCII(data3D, width, height,atoi(argv[2]),atoi(argv[3]));
     
-    // Et l'on réecrit dans un fichier le tableau obtenu afin de voir la conversion fonctionne
-    write(data,width,height,components); 
-        
+    free(data3D); // Une fois l'affichage effectué, on peut liberer le tableau data3D également.
 
     return 0;
 }
